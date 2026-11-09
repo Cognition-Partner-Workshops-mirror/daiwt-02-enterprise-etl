@@ -1,0 +1,146 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Wide World Importers shared SQL Server development estate
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+  ClientCidr:
+    Type: String
+    AllowedPattern: '(\d{1,3}\.){3}\d{1,3}/32'
+Resources:
+  Credentials:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: daiwt-02-sqlserver
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"wwi_admin"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludePunctuation: true
+      Tags:
+        - {Key: project, Value: daiwt}
+        - {Key: demo, Value: '02'}
+  Backups:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub daiwt-02-sqlserver-backups-${AWS::AccountId}-${AWS::Region}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      Tags:
+        - {Key: project, Value: daiwt}
+        - {Key: demo, Value: '02'}
+  RestoreRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: daiwt-02-sqlserver-restore
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: rds.amazonaws.com}
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: backup-restore
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['s3:ListBucket', 's3:GetBucketLocation']
+                Resource: !GetAtt Backups.Arn
+              - Effect: Allow
+                Action: ['s3:GetObject', 's3:GetObjectAttributes', 's3:PutObject', 's3:ListMultipartUploadParts', 's3:AbortMultipartUpload']
+                Resource: !Sub '${Backups.Arn}/*'
+      Tags:
+        - {Key: project, Value: daiwt}
+        - {Key: demo, Value: '02'}
+  Options:
+    Type: AWS::RDS::OptionGroup
+    Properties:
+      OptionGroupDescription: Wide World Importers native backup restore
+      EngineName: sqlserver-ex
+      MajorEngineVersion: '16.00'
+      OptionConfigurations:
+        - OptionName: SQLSERVER_BACKUP_RESTORE
+          OptionSettings:
+            - Name: IAM_ROLE_ARN
+              Value: !GetAtt RestoreRole.Arn
+      Tags:
+        - {Key: project, Value: daiwt}
+        - {Key: demo, Value: '02'}
+  Network:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: daiwt-02-sqlserver
+      GroupDescription: SQL Server operator access
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 1433
+          ToPort: 1433
+          CidrIp: !Ref ClientCidr
+      Tags:
+        - {Key: Name, Value: daiwt-02-sqlserver}
+        - {Key: project, Value: daiwt}
+        - {Key: demo, Value: '02'}
+  SubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: daiwt-02-sqlserver
+      DBSubnetGroupDescription: Wide World Importers SQL Server subnets
+      SubnetIds: !Ref Subnets
+      Tags:
+        - {Key: project, Value: daiwt}
+        - {Key: demo, Value: '02'}
+  Database:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: daiwt-02-sqlserver
+      Engine: sqlserver-ex
+      EngineVersion: 16.00.4225.2.v1
+      LicenseModel: license-included
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: '20'
+      StorageType: gp2
+      MasterUsername: !Sub '{{resolve:secretsmanager:${Credentials}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${Credentials}:SecretString:password}}'
+      DBSubnetGroupName: !Ref SubnetGroup
+      VPCSecurityGroups: [!GetAtt Network.GroupId]
+      OptionGroupName: !Ref Options
+      PubliclyAccessible: true
+      MultiAZ: false
+      BackupRetentionPeriod: 0
+      AutoMinorVersionUpgrade: true
+      DeletionProtection: false
+      CopyTagsToSnapshot: true
+      Tags:
+        - {Key: project, Value: daiwt}
+        - {Key: demo, Value: '02'}
+  Connection:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref Credentials
+      TargetId: !Ref Database
+      TargetType: AWS::RDS::DBInstance
+Outputs:
+  Host:
+    Value: !GetAtt Database.Endpoint.Address
+  Port:
+    Value: !GetAtt Database.Endpoint.Port
+  SecretName:
+    Value: daiwt-02-sqlserver
+  BackupBucket:
+    Value: !Ref Backups
+  SecurityGroupId:
+    Value: !GetAtt Network.GroupId

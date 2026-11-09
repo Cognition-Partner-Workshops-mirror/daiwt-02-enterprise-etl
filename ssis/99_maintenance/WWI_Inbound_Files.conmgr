@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<DTS:ConnectionManager xmlns:DTS="www.microsoft.com/SqlServer/Dts"
+  DTS:ObjectName="WWI_Inbound_Files"
+  DTS:DTSID="{5B9B814D-2D49-C9BB-A7CD-36353A6059BF}"
+  DTS:CreationName="FILE"
+  DTS:Description="Inbound partner/carrier/bank file drop root.">
+  <DTS:PropertyExpression DTS:Name="ConnectionString">@[$Project::InboundFileRoot]</DTS:PropertyExpression>
+  <DTS:ObjectData>
+    <DTS:ConnectionManager
+      DTS:ConnectionString="C:\WWI\DEV\inbound" />
+  </DTS:ObjectData>
+</DTS:ConnectionManager>

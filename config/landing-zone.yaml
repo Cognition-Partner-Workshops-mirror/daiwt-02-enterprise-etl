@@ -1,0 +1,176 @@
+# ---------------------------------------------------------------------------
+# File landing-zone layout for the WWI estate.
+#
+# The root is WWI_LANDING_ROOT (config/.env.example). Everything below is
+# relative to it. deployment/preflight checks that the five top-level
+# directories exist; it does not create them, because on the PROD file server
+# they are a clustered share with its own quota and ACLs.
+#
+# Retention here is the file retention. Row-level retention lives with the load
+# that produced it.
+# ---------------------------------------------------------------------------
+
+root_variable: WWI_LANDING_ROOT
+
+directories:
+
+  inbound:
+    purpose: Feeds drop here. Polled every 15 minutes by "WWI - File Ingestion".
+    permissions: 'WWI_FileOps_Proxy account: read/write. Feed providers: write only.'
+    retention_days: 0        # moved to archive or quarantine on processing
+    # One entry per feed the estate actually ingests. The directory, the file
+    # specification and the encoding are the ones the ING_FILE_* packages
+    # enumerate, and `raw_table` is where the package lands the rows; a feed
+    # that appears here and nowhere else would be a feed nothing reads.
+    subdirectories:
+      - path: inbound/partner/na
+        feeds: [partner_sales_na]
+        pattern: 'partner_sales_na_{yyyyMMdd}_{seq3}.csv'
+        encoding: windows-1252
+        delimiter: ','
+        header: true
+        raw_table: raw.FilePartnerSales
+        consumed_by: ING_FILE_PartnerSales_NA
+        notes: US date format, and a T footer carrying the row count.
+      - path: inbound/partner/eu
+        feeds: [partner_sales_eu]
+        pattern: 'partner_sales_eu_{yyyyMMdd}_{seq3}.csv'
+        encoding: utf-8
+        delimiter: ','
+        header: true
+        raw_table: raw.FilePartnerSales
+        consumed_by: ING_FILE_PartnerSales_EU
+        notes: Day-first dates and a 9 footer carrying the amount sum.
+      - path: inbound/partner/apac
+        feeds: [partner_sales_apac]
+        pattern: 'partner_sales_apac_{yyyyMMdd}_{seq3}.txt'
+        encoding: iso-8859-1
+        delimiter: "\t"
+        header: false
+        raw_table: raw.FilePartnerSales
+        consumed_by: ING_FILE_PartnerSales_APAC
+        notes: >-
+          Tab separated and Latin-1 despite the interface spec saying UTF-8.
+          The package transcodes; do not change the encoding here.
+      - path: inbound/carrier
+        feeds: [carrier_scan]
+        pattern: 'carrier_scan_{yyyyMMdd}_{seq3}.csv'
+        encoding: windows-1252
+        delimiter: ','
+        header: true
+        raw_table: raw.FileCarrierScan
+        consumed_by: ING_FILE_CarrierScan
+        notes: >-
+          The carrier still sends windows-1252 despite eight years of asking,
+          with local timestamps and no UTC offset.
+      - path: inbound/supplier
+        feeds: [supplier_catalog]
+        pattern: 'supplier_catalog_{yyyyMMdd}_{seq3}.psv'
+        encoding: iso-8859-1
+        delimiter: '|'
+        header: true
+        raw_table: raw.FileSupplierCatalog
+        consumed_by: ING_FILE_SupplierCatalog
+        notes: Quarterly price lists, pipe separated, with a TRL footer.
+      - path: inbound/treasury
+        feeds: [fx_override]
+        pattern: 'fx_override_{yyyyMMdd}_{seq3}.csv'
+        encoding: windows-1252
+        delimiter: ','
+        header: true
+        raw_table: raw.FileFxOverride
+        consumed_by: ING_FILE_FxOverride
+        notes: Rate overrides pasted out of a spreadsheet, with a checksum line.
+
+    # Not feeds: two holding folders the packages themselves write. A file that
+    # fails structural validation is left in inbound/failed for
+    # ERR_Quarantine_BadFiles to move into quarantine, and a file whose rows
+    # have settled is left in inbound/processed for MNT_Archive_ProcessedFiles
+    # to move into archive. They are listed here because those two Foreach
+    # loops enumerate them, so they have to exist on the execution host.
+    working_subdirectories:
+      - path: inbound/failed
+        written_by: the ING_FILE_* packages
+        drained_by: ERR_Quarantine_BadFiles
+      - path: inbound/processed
+        written_by: the ING_FILE_* packages
+        drained_by: MNT_Archive_ProcessedFiles
+
+  archive:
+    purpose: Successfully processed files, moved out of inbound by MNT_Archive_ProcessedFiles.
+    permissions: 'WWI_FileOps_Proxy account: read/write. Operators: read.'
+    retention_days: 400
+    layout: 'archive/{feed}/{yyyy}/{MM}/{original_filename}'
+    notes: >-
+      400 days rather than 365 so that a year-end investigation started in
+      January can still see the previous January. Compression is done by the
+      file server, not by the ETL.
+
+  quarantine:
+    purpose: Files that failed structural validation, and per-run reject extracts.
+    permissions: 'WWI_FileOps_Proxy account: read/write. Data stewards: read/write.'
+    retention_days: 90
+    layout: 'quarantine/{feed}/{yyyyMMdd}/{original_filename}'
+    subdirectories:
+      - path: quarantine
+        feeds: [quarantine_rejects]
+        pattern: 'quarantine_rejects_{yyyyMMdd}_{seq3}.dat'
+        encoding: utf-8
+        delimiter: '|'
+        header: true
+        raw_table: err.RejectedFileRow
+        consumed_by: ING_FILE_QuarantineMalformed
+        notes: >-
+          The expected reject set for every feed. It is a reconciliation input,
+          not an inbound feed, which is why it sits under quarantine.
+    regional_overrides:
+      EU:
+        retention_days: 30
+        reason: >-
+          A quarantined EU file can contain personal data that never passed
+          validation and therefore never acquired a consent record. It is held
+          for the minimum triage window only.
+      APAC:
+        retention_days: 180
+        reason: >-
+          The APAC bank feed is reconciled quarterly, so a quarantined file must
+          survive until the next reconciliation.
+    alerting: >-
+      "WWI - File Ingestion" fails its final step when the quarantine count for
+      the run exceeds the threshold, which notifies WWI ETL On-Call.
+
+  work:
+    purpose: Scratch space for the ingestion packages - unzipped members, split files.
+    permissions: 'WWI_FileOps_Proxy account: full control. Nobody else.'
+    retention_days: 2
+    notes: >-
+      Cleared by the weekly maintenance job rather than per run, because a failed
+      run's work files are the only diagnostic left when the source file has
+      already been archived.
+
+  outbound:
+    purpose: Extracts the estate produces for downstream consumers.
+    permissions: 'WWI_FileOps_Proxy account: read/write. Consumers: read only.'
+    retention_days: 45
+    subdirectories:
+      - path: outbound/finance
+        feeds: [GL_RECON_EXTRACT, FX_APPLIED_RATES]
+        pattern: '{feed}_{yyyyMM}.csv'
+        notes: Produced by the finance close job; consumed by the group reporting team.
+      - path: outbound/reporting
+        feeds: [DIM_CUSTOMER_SNAPSHOT]
+        pattern: '{feed}_{yyyyMMdd}.csv'
+        notes: >-
+          A weekly snapshot that exists only because one reporting tool was never
+          repointed at the warehouse. It is the oldest outbound feed in the estate.
+
+# Housekeeping ownership, so it is clear what cleans what:
+#   inbound     - emptied by the ingestion job as it processes
+#   work        - cleared by "WWI - Weekly Maintenance"
+#   archive     - trimmed by the file server's own retention policy
+#   quarantine  - trimmed by the file server, per the regional overrides above
+#   outbound    - trimmed by the file server
+housekeeping_owner_notes: >-
+  The ETL does not delete from archive, quarantine or outbound. That is the file
+  server's retention policy, configured outside this repository. The split has
+  caused confusion before: an ETL change cannot fix a retention complaint.

@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+generators/output/
+*.bak
+
+# SSIS build intermediates and output
+obj/
+bin/
+artifacts/
+*.ispac
+.mypy_cache/
+.ruff_cache/

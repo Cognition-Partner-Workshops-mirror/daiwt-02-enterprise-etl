@@ -1,0 +1,16 @@
+{
+  "upstream": "https://github.com/microsoft/sql-server-samples/releases/tag/wide-world-importers-v1.0",
+  "license": "MIT",
+  "databases": [
+    {
+      "name": "WideWorldImporters",
+      "file": "WideWorldImporters-Standard.bak",
+      "sha256": "066279a8cd28c8d85cbd8215ea71a5d672b420cfbc19756b635c27bd8027dada"
+    },
+    {
+      "name": "WideWorldImportersDW",
+      "file": "WideWorldImportersDW-Standard.bak",
+      "sha256": "7604748509c07edec748c484aee26382947b1a78d50e85a7237380782ee22138"
+    }
+  ]
+}
