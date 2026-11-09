@@ -47,8 +47,8 @@ param(
     [int] $ExpectedPackageCount = 0,
     # Secrets Manager ids holding the two accounts the catalog environment
     # binds. Each is a JSON document with username and password members.
-    [string] $OracleSecretId = 'legacy-demo/oracle/admin',
-    [string] $SqlServerSecretId = 'legacy-demo/sqlserver/devin_migration',
+    [string] $OracleSecretId = 'wwi/oracle/administration',
+    [string] $SqlServerSecretId = 'wwi/sqlserver/development',
     # Address the catalog binds as SqlServerHost. Empty means "ask the host",
     # which is the correct answer: see the environment step below.
     [string] $CatalogSqlServerHost = '',

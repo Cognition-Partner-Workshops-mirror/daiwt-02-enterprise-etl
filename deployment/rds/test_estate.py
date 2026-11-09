@@ -1,4 +1,5 @@
 import importlib.util
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -35,6 +36,18 @@ class EstateTests(unittest.TestCase):
                 estate.main()
             self.assertEqual(error.exception.code, 2)
             conn.assert_not_called()
+
+    def test_golden_csv_uses_stable_lf_line_endings(self):
+        connection = MagicMock()
+        cursor = connection.__enter__.return_value.cursor.return_value
+        cursor.description = [("value",)]
+        cursor.fetchall.return_value = [{"value": "sample"}]
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(estate, "baseline", return_value={}), \
+                patch.object(estate, "connect", return_value=connection):
+            estate.export_golden(Path(directory))
+            self.assertEqual((Path(directory) / "sale-by-day.csv").read_bytes(),
+                             b"value\nsample\n")
 
 
 if __name__ == "__main__":

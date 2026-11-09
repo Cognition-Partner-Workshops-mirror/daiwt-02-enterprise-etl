@@ -145,7 +145,8 @@ def export_golden(directory):
         for name, query in queries.items():
             cursor.execute(query)
             with (directory / (name + ".csv")).open("w", newline="") as file:
-                writer = csv.DictWriter(file, fieldnames=[d[0] for d in cursor.description])
+                writer = csv.DictWriter(file, fieldnames=[d[0] for d in cursor.description],
+                                        lineterminator="\n")
                 writer.writeheader()
                 writer.writerows(cursor.fetchall())
     print(json.dumps(counts, indent=2))

@@ -76,11 +76,30 @@ aws cloudformation deploy --region "$AWS_REGION" \
 python3 deployment/rds/estate.py setup
 ```
 
+An operator with two outbound addresses can also pass
+`AdditionalClientCidr='<second-ip>/32'`. Keep both addresses narrowly scoped;
+an HTTPS IP-check service may report a different egress address from a database
+connection. Update the stack's operator parameters before connecting from a
+different machine.
+
 SQL Server Express is single-AZ, `db.t3.micro`, with 20 GiB gp2 storage.
 It does not run SQL Agent or SSIS. The instance and storage incur charges while
 idle; S3 and the secret also have small standing charges. Stop/start the shared
 instance only after coordinating with all consumers. RDS automatically restarts
 stopped instances after seven days; storage charges continue while stopped.
+
+Indicative us-east-1 on-demand standing cost at 730 running hours/month:
+
+| Item | Approximate cost |
+| --- | --- |
+| Express `db.t3.micro`, licence included | $0.022/hour, $16.06/month |
+| 20 GiB gp2 | $2.30/month |
+| One public IPv4 address | $0.005/hour, $3.65/month |
+| One Secrets Manager secret | $0.40/month plus API calls |
+| Pinned backups in S3 | Less than $0.01/month |
+
+Total is about $22.42/month while running, excluding transfers, excess CPU
+credits, API calls and taxes. This is an estimate, not a billing cap.
 
 ## Offline estate checks and synthetic extracts
 

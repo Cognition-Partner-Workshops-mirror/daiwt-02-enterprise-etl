@@ -45,7 +45,7 @@ param(
     [int] $LoggingLevel = 1,
     [string] $BusinessDate,
     [int] $ExecutionTimeoutSeconds = 10800,
-    [string] $SqlServerSecretId = 'legacy-demo/sqlserver/devin_migration',
+    [string] $SqlServerSecretId = 'wwi/sqlserver/development',
     [switch] $AdoptRunning,
     [switch] $DryRun
 )

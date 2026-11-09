@@ -1,8 +1,9 @@
 # Infrastructure
 
-The descriptive picture of what the WWI estate runs on. Nothing in this
-directory executes, provisions or connects to anything - it is inventory and
-explanation, kept next to the code so the two do not drift.
+The inherited inventories describe the on-premises WWI estate. They are
+descriptive records, not the topology of the hosted development restore.
+`aws/sqlserver.yaml` separately provisions the small hosted SQL Server profile;
+see the root README for operator commands and its limited runtime scope.
 
 | File | Kind | Contents |
 | --- | --- | --- |
@@ -46,6 +47,6 @@ which exists because the APAC bank will not deliver files outside the region.
 
 ## What is not here
 
-No provisioning code, no infrastructure-as-code templates, no cloud resources.
-The estate is on-premises and is built by the platform team through their own
-processes; this directory is the record of the result, not the mechanism.
+The hosted profile does not provision the on-premises Oracle ERP, Windows SSIS
+hosts, regional file servers, or SQL Agent machinery. Those remain inherited
+definitions only. It restores the two original SQL Server database snapshots.

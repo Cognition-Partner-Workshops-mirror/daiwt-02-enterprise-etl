@@ -8,6 +8,12 @@ Parameters:
   ClientCidr:
     Type: String
     AllowedPattern: '(\d{1,3}\.){3}\d{1,3}/32'
+  AdditionalClientCidr:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|(\d{1,3}\.){3}\d{1,3}/32'
+Conditions:
+  HasAdditionalClient: !Not [!Equals [!Ref AdditionalClientCidr, '']]
 Resources:
   Credentials:
     Type: AWS::SecretsManager::Secret
@@ -94,6 +100,16 @@ Resources:
         - {Key: Name, Value: daiwt-02-sqlserver}
         - {Key: project, Value: daiwt}
         - {Key: demo, Value: '02'}
+  AdditionalClientAccess:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasAdditionalClient
+    Properties:
+      GroupId: !GetAtt Network.GroupId
+      IpProtocol: tcp
+      FromPort: 1433
+      ToPort: 1433
+      CidrIp: !Ref AdditionalClientCidr
+      Description: Additional shared operator egress
   SubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
